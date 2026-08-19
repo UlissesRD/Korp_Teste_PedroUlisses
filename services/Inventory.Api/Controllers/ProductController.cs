@@ -1,6 +1,8 @@
+using Inventory.Api.Data;
 using Inventory.Api.DTOs;
 using Inventory.Api.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Inventory.Api.Controllers;
 
@@ -8,26 +10,37 @@ namespace Inventory.Api.Controllers;
 [Route("api/products")]
 public class ProductController : ControllerBase
 {
-    private static readonly List<Product> Products = [];
+    private readonly InventoryDbContext _dbContext;
+
+    public ProductController(InventoryDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
 
     [HttpGet]
-    public ActionResult<IEnumerable<ProductResponse>> GetAll()
+    public async Task<ActionResult<IEnumerable<ProductResponse>>> GetAll()
     {
-        var response = Products.Select(product => new ProductResponse(
-            product.Id,
-            product.Code,
-            product.Description,
-            product.Balance,
-            product.CreatedAt
-        ));
+        var products = await _dbContext.Products
+            .AsNoTracking()
+            .OrderBy(product => product.Code)
+            .Select(product => new ProductResponse(
+                product.Id,
+                product.Code,
+                product.Description,
+                product.Balance,
+                product.CreatedAt
+            ))
+            .ToListAsync();
 
-        return Ok(response);
+        return Ok(products);
     }
 
     [HttpGet("{id:guid}")]
-    public ActionResult<ProductResponse> GetById(Guid id)
+    public async Task<ActionResult<ProductResponse>> GetById(Guid id)
     {
-        var product = Products.FirstOrDefault(product => product.Id == id);
+        var product = await _dbContext.Products
+            .AsNoTracking()
+            .FirstOrDefaultAsync(product => product.Id == id);
 
         if (product is null)
         {
@@ -37,29 +50,22 @@ public class ProductController : ControllerBase
             });
         }
 
-        return Ok(new ProductResponse(
-            product.Id,
-            product.Code,
-            product.Description,
-            product.Balance,
-            product.CreatedAt
-        ));
+        return Ok(ToResponse(product));
     }
 
     [HttpPost]
-    public ActionResult<ProductResponse> Create(CreateProductRequest request)
+    public async Task<ActionResult<ProductResponse>> Create(CreateProductRequest request)
     {
         var normalizedCode = request.Code.Trim().ToUpperInvariant();
 
-        var codeAlreadyExists = Products.Any(
-            product => product.Code == normalizedCode
-        );
+        var codeAlreadyExists = await _dbContext.Products
+            .AnyAsync(product => product.Code == normalizedCode);
 
         if (codeAlreadyExists)
         {
             return Conflict(new
             {
-                message = "Já existe um produto com esse código."
+                message = "Ja existe um produto com esse codigo."
             });
         }
 
@@ -70,20 +76,24 @@ public class ProductController : ControllerBase
             Balance = request.Balance,
         };
 
-        Products.Add(product);
+        _dbContext.Products.Add(product);
+        await _dbContext.SaveChangesAsync();
 
-        var response = new ProductResponse(
+        return CreatedAtAction(
+            nameof(GetById), 
+            new { id = product.Id }, 
+            ToResponse(product)
+        );
+    }
+
+    private static ProductResponse ToResponse(Product product)
+    {
+        return new ProductResponse(
             product.Id,
             product.Code,
             product.Description,
             product.Balance,
             product.CreatedAt
-        );
-
-        return CreatedAtAction(
-            nameof(GetById), 
-            new { id = product.Id }, 
-            response
         );
     }
 }
