@@ -1,0 +1,26 @@
+# .NET
+**/bin/
+**/obj/
+*.dll
+*.pdb
+*.cache
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Configurações locais e segredos
+**/appsettings.Development.json
+.env
+.env.*
+
+# Angular / Node
+**/node_modules/
+**/dist/
+.angular/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
